@@ -422,3 +422,51 @@ def add_paper_manually():
     result = fetch_paper_by_id(arxiv_id)
 
     return jsonify(result)
+
+@main.route('/api/paper/<string:paper_id>/summary', methods=['POST'])
+def generate_paper_summary(paper_id):
+    """Generate summary for a specific paper."""
+    from app.summarizer import generate_summary, SUMMARY_TYPES
+
+    data = request.json
+    summary_type = data.get('summary_type', 'general')
+
+    if summary_type not in SUMMARY_TYPES:
+        return jsonify({'success': False, 'message': 'Invalid summary type'}), 400
+
+    session = get_session()
+    paper = session.query(Paper).filter_by(id=paper_id).first()
+
+    if not paper:
+        session.close()
+        return jsonify({'success': False, 'message': 'Paper not found'}), 404
+
+    try:
+        authors_list = json.loads(paper.authors)
+        summary = generate_summary(paper.title, paper.abstract, authors_list, summary_type=summary_type)
+
+        # Update paper with new summary
+        paper.summary = summary
+        session.commit()
+        session.close()
+
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'summary_type': SUMMARY_TYPES[summary_type]['name']
+        })
+    except Exception as e:
+        session.close()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@main.route('/api/summary-types', methods=['GET'])
+def get_summary_types():
+    """Get available summary types."""
+    from app.summarizer import SUMMARY_TYPES
+
+    types = [
+        {'key': key, 'name': config['name']}
+        for key, config in SUMMARY_TYPES.items()
+    ]
+
+    return jsonify({'summary_types': types})

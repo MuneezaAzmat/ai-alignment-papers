@@ -61,27 +61,37 @@
                         </div>
                     </div>
 
-                    {% if paper.summary %}
-                    <div class="summary">
-                        <div class="summary-header">
-                            <h3>Summary</h3>
-                            <div class="summary-rating">
-                                <span class="rating-label">Rate this summary:</span>
-                                <div class="stars" data-paper-id="{{ paper.id }}">
-                                    {% for i in range(1, 6) %}
-                                    <span class="star {% if paper.summary_rating and i <= paper.summary_rating %}filled{% endif %}"
-                                          onclick="rateSummary('{{ paper.id }}', {{ i }})">★</span>
-                                    {% endfor %}
+                    <div class="summary-section">
+                        {% if paper.summary %}
+                        <div class="summary">
+                            <div class="summary-header">
+                                <h3>Summary</h3>
+                                <div class="summary-controls">
+                                    <button onclick="regenerateSummary('{{ paper.id }}')" class="btn-regenerate">
+                                        🔄 Regenerate
+                                    </button>
+                                    <div class="summary-rating">
+                                        <span class="rating-label">Rate:</span>
+                                        <div class="stars" data-paper-id="{{ paper.id }}">
+                                            {% for i in range(1, 6) %}
+                                            <span class="star {% if paper.summary_rating and i <= paper.summary_rating %}filled{% endif %}"
+                                                  onclick="rateSummary('{{ paper.id }}', {{ i }})">★</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                            <p id="summary-text-{{ paper.id }}">{{ paper.summary }}</p>
                         </div>
-                        <p>{{ paper.summary }}</p>
+                        {% else %}
+                        <div class="no-summary">
+                            <p>No summary yet</p>
+                            <button onclick="generateSummary('{{ paper.id }}')" class="btn-generate-summary">
+                                ✨ Generate Summary
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    <div class="no-summary">
-                        <em>Summary not yet generated</em>
-                    </div>
-                    {% endif %}
 
                     <details class="abstract-details">
                         <summary>View Abstract</summary>
@@ -94,6 +104,9 @@
                         <div class="paper-links">
                             <a href="{{ paper.arxiv_url }}" target="_blank" class="link-btn">arXiv</a>
                             <a href="{{ paper.pdf_url }}" target="_blank" class="link-btn">PDF</a>
+                            <button onclick="openPaperViewer('{{ paper.id }}', '{{ paper.pdf_url }}')" class="link-btn viewer-btn">
+                                📄 View Paper
+                            </button>
                         </div>
                         <div class="paper-controls">
                             <button onclick="toggleFavorite('{{ paper.id }}')"
@@ -114,6 +127,19 @@
                     <p>No papers found. Click "Fetch New Papers" to get started!</p>
                 </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Paper Viewer Modal -->
+    <div id="paperViewerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Paper Viewer</h2>
+                <button onclick="closePaperViewer()" class="modal-close">×</button>
+            </div>
+            <div class="modal-body">
+                <iframe id="pdfViewer" width="100%" height="600px" frameborder="0"></iframe>
+            </div>
         </div>
     </div>
 
@@ -336,6 +362,83 @@
                 }
             } catch (error) {
                 alert('Error adding paper: ' + error);
+            }
+        }
+
+        async function generateSummary(paperId) {
+            // Ask user for summary type
+            const types = await fetch('/api/summary-types').then(r => r.json());
+            const typeOptions = types.summary_types.map((t, i) => `${i+1}. ${t.name}`).join('\n');
+
+            const choice = prompt(
+                'Choose summary type:\n\n' + typeOptions + '\n\nEnter number (1-6):'
+            );
+
+            if (!choice) return;
+
+            const typeIndex = parseInt(choice) - 1;
+            if (typeIndex < 0 || typeIndex >= types.summary_types.length) {
+                alert('Invalid choice');
+                return;
+            }
+
+            const summaryType = types.summary_types[typeIndex].key;
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+
+            try {
+                const response = await fetch(`/api/paper/${paperId}/summary`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({summary_type: summaryType})
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                    btn.disabled = false;
+                    btn.textContent = '✨ Generate Summary';
+                }
+            } catch (error) {
+                alert('Error generating summary: ' + error);
+                btn.disabled = false;
+                btn.textContent = '✨ Generate Summary';
+            }
+        }
+
+        async function regenerateSummary(paperId) {
+            if (!confirm('Regenerate summary? This will replace the current one.')) return;
+            await generateSummary(paperId);
+        }
+
+        function openPaperViewer(paperId, pdfUrl) {
+            const modal = document.getElementById('paperViewerModal');
+            const viewer = document.getElementById('pdfViewer');
+
+            // Use PDF.js viewer or embed directly
+            viewer.src = pdfUrl;
+
+            modal.style.display = 'block';
+        }
+
+        function closePaperViewer() {
+            const modal = document.getElementById('paperViewerModal');
+            const viewer = document.getElementById('pdfViewer');
+
+            modal.style.display = 'none';
+            viewer.src = '';
+        }
+
+        // Close modal on outside click
+        window.onclick = function(event) {
+            const modal = document.getElementById('paperViewerModal');
+            if (event.target == modal) {
+                closePaperViewer();
             }
         }
 

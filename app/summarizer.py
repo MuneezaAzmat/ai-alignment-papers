@@ -2,7 +2,70 @@ import anthropic
 from app.config import ANTHROPIC_API_KEY
 from app.database import get_session, Paper
 
-def generate_summary(title, abstract, authors_list, use_learning=True):
+SUMMARY_TYPES = {
+    'general': {
+        'name': 'General Overview',
+        'prompt': """Provide a concise summary of this paper focusing on:
+1. The main research question or problem
+2. Key methodology or approach
+3. Main findings or contributions
+4. Relevance to AI alignment and safety
+
+Provide a clear, accessible summary in 3-4 paragraphs suitable for researchers and practitioners."""
+    },
+    'technical': {
+        'name': 'Technical Details',
+        'prompt': """Provide a detailed technical summary focusing on:
+1. Specific algorithms, architectures, or methods used
+2. Implementation details and hyperparameters
+3. Technical challenges and how they were addressed
+4. Experimental setup and evaluation metrics
+
+Include technical depth suitable for researchers implementing similar work."""
+    },
+    'mathematical': {
+        'name': 'Mathematical Analysis',
+        'prompt': """Provide a mathematical summary focusing on:
+1. Key mathematical formulations and equations
+2. Theoretical foundations and proofs
+3. Mathematical properties and guarantees
+4. Formal analysis and complexity
+
+Emphasize mathematical rigor and formal aspects."""
+    },
+    'takeaway': {
+        'name': 'Key Takeaways',
+        'prompt': """Provide a concise summary focusing on:
+1. The single most important contribution
+2. What makes this work significant
+3. Practical implications for AI alignment
+4. What readers should remember
+
+Be brief and action-oriented, suitable for quick scanning."""
+    },
+    'novelty': {
+        'name': 'Novel Contributions',
+        'prompt': """Analyze what's new in this paper focusing on:
+1. How it differs from prior work
+2. Novel techniques or approaches introduced
+3. Unique insights or perspectives
+4. Advances over the state-of-the-art
+
+Emphasize what makes this work original and innovative."""
+    },
+    'practical': {
+        'name': 'Practical Implications',
+        'prompt': """Summarize the practical aspects focusing on:
+1. Real-world applications and use cases
+2. Implementation considerations
+3. Limitations and practical constraints
+4. How this can be applied in practice
+
+Focus on actionable insights for practitioners."""
+    }
+}
+
+def generate_summary(title, abstract, authors_list, summary_type='general', use_learning=True):
     """
     Generate a summary of a paper using Claude API.
     Optionally incorporates user feedback to improve summaries.
@@ -11,6 +74,7 @@ def generate_summary(title, abstract, authors_list, use_learning=True):
         title: Paper title
         abstract: Paper abstract
         authors_list: List of author names
+        summary_type: Type of summary to generate (general, technical, mathematical, etc.)
         use_learning: Whether to use learned preferences from user feedback
 
     Returns:
@@ -21,21 +85,19 @@ def generate_summary(title, abstract, authors_list, use_learning=True):
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+    # Get summary type prompt
+    type_config = SUMMARY_TYPES.get(summary_type, SUMMARY_TYPES['general'])
+
     # Base prompt
-    prompt = f"""Please provide a concise summary of this AI alignment research paper.
-Focus on:
-1. The main research question or problem
-2. Key methodology or approach
-3. Main findings or contributions
-4. Relevance to AI alignment and safety
+    prompt = f"""Please provide a summary of this AI alignment research paper.
+
+{type_config['prompt']}
 
 Paper Title: {title}
 
 Authors: {', '.join(authors_list)}
 
-Abstract: {abstract}
-
-Provide a clear, accessible summary in 3-4 paragraphs suitable for researchers and practitioners interested in AI alignment."""
+Abstract: {abstract}"""
 
     # Add learned preferences if enabled
     if use_learning:
