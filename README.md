@@ -21,6 +21,12 @@ An automated web application that monitors the latest AI alignment research pape
 - **AI Learning**: The system learns from your feedback to improve future summaries
 - **Preference Insights**: View analytics about your preferences and what the system has learned
 
+### Favorites & Collections
+- **Bookmark Papers**: Save important papers to your personal favorites collection
+- **Personal Rankings**: Assign your own ranking (0-10) to favorite papers
+- **Add Notes**: Write personal notes and observations about each paper
+- **Organized View**: Access all your favorites in one dedicated page, sorted by your rankings
+
 ## Ranking System
 
 Papers are automatically ranked based on author affiliations:
