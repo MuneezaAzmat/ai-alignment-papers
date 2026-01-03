@@ -2,6 +2,8 @@
 
 An automated web application that monitors the latest AI alignment research papers from arXiv, ranks them by institutional impact, and generates AI-powered summaries using Claude.
 
+🌐 **Live Demo:** [https://ai-alignment-papers.onrender.com](https://ai-alignment-papers.onrender.com)
+
 ## Features
 
 ### Core Functionality
