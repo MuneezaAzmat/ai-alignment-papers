@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Alignment Papers</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>AI Alignment Research Papers</h1>
+        <p class="subtitle">Curated and ranked papers from arXiv</p>
+        <nav>
+            <a href="/preferences" class="nav-link">⚙️ Manage Rankings</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <button onclick="fetchPapers()" class="btn btn-primary">Fetch New Papers</button>
+            <button onclick="generateSummaries()" class="btn btn-secondary">Generate Summaries</button>
+            <div class="stats" id="stats"></div>
+        </div>
+
+        <div class="filters">
+            <label>
+                Minimum Rank Score:
+                <select onchange="filterPapers(this.value)">
+                    <option value="0" {% if min_rank == 0 %}selected{% endif %}>All Papers</option>
+                    <option value="7" {% if min_rank == 7 %}selected{% endif %}>High Impact (7+)</option>
+                    <option value="8" {% if min_rank == 8 %}selected{% endif %}>Very High Impact (8+)</option>
+                    <option value="9" {% if min_rank == 9 %}selected{% endif %}>Top Tier (9+)</option>
+                </select>
+            </label>
+        </div>
+
+        <div class="papers-list">
+            {% if papers %}
+                {% for paper in papers %}
+                <article class="paper-card rank-{{ paper.rank_score|int }}">
+                    <div class="paper-header">
+                        <h2 class="paper-title">
+                            <a href="{{ paper.arxiv_url }}" target="_blank">{{ paper.title }}</a>
+                        </h2>
+                        <span class="rank-badge">Rank: {{ "%.1f"|format(paper.rank_score) }}</span>
+                    </div>
+
+                    <div class="paper-meta">
+                        <div class="authors">
+                            <strong>Authors:</strong> {{ paper.authors|join(', ') }}
+                        </div>
+                        {% if paper.affiliations %}
+                        <div class="affiliations">
+                            <strong>Affiliations:</strong> {{ paper.affiliations|join(', ') }}
+                        </div>
+                        {% endif %}
+                        <div class="date">
+                            <strong>Published:</strong> {{ paper.published_date.strftime('%Y-%m-%d') }}
+                        </div>
+                    </div>
+
+                    {% if paper.summary %}
+                    <div class="summary">
+                        <div class="summary-header">
+                            <h3>Summary</h3>
+                            <div class="summary-rating">
+                                <span class="rating-label">Rate this summary:</span>
+                                <div class="stars" data-paper-id="{{ paper.id }}">
+                                    {% for i in range(1, 6) %}
+                                    <span class="star {% if paper.summary_rating and i <= paper.summary_rating %}filled{% endif %}"
+                                          onclick="rateSummary('{{ paper.id }}', {{ i }})">★</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <p>{{ paper.summary }}</p>
+                    </div>
+                    {% else %}
+                    <div class="no-summary">
+                        <em>Summary not yet generated</em>
+                    </div>
+                    {% endif %}
+
+                    <details class="abstract-details">
+                        <summary>View Abstract</summary>
+                        <div class="abstract">
+                            {{ paper.abstract }}
+                        </div>
+                    </details>
+
+                    <div class="paper-actions">
+                        <div class="paper-links">
+                            <a href="{{ paper.arxiv_url }}" target="_blank" class="link-btn">arXiv</a>
+                            <a href="{{ paper.pdf_url }}" target="_blank" class="link-btn">PDF</a>
+                        </div>
+                        <div class="rank-override">
+                            <button onclick="toggleRankOverride('{{ paper.id }}')" class="btn-small">
+                                {% if paper.user_rank_override %}✓ Custom Rank{% else %}Set Custom Rank{% endif %}
+                            </button>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            {% else %}
+                <div class="no-papers">
+                    <p>No papers found. Click "Fetch New Papers" to get started!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        async function fetchPapers() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Fetching...';
+
+            try {
+                const response = await fetch('/api/fetch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({days_back: 7, max_results: 100})
+                });
+                const data = await response.json();
+                alert(data.message);
+                location.reload();
+            } catch (error) {
+                alert('Error fetching papers: ' + error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Fetch New Papers';
+            }
+        }
+
+        async function generateSummaries() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+
+            try {
+                const response = await fetch('/api/summarize', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({limit: 10})
+                });
+                const data = await response.json();
+                alert(data.message);
+                location.reload();
+            } catch (error) {
+                alert('Error generating summaries: ' + error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Summaries';
+            }
+        }
+
+        function filterPapers(minRank) {
+            window.location.href = `/?min_rank=${minRank}`;
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                document.getElementById('stats').innerHTML = `
+                    <span>Total: ${data.total_papers}</span>
+                    <span>With Summaries: ${data.papers_with_summaries}</span>
+                    <span>High Impact: ${data.high_rank_papers}</span>
+                `;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function rateSummary(paperId, rating) {
+            try {
+                const response = await fetch(`/api/paper/${paperId}/rate-summary`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({rating: rating})
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update star display
+                    const starsContainer = document.querySelector(`.stars[data-paper-id="${paperId}"]`);
+                    const stars = starsContainer.querySelectorAll('.star');
+                    stars.forEach((star, index) => {
+                        if (index < rating) {
+                            star.classList.add('filled');
+                        } else {
+                            star.classList.remove('filled');
+                        }
+                    });
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error rating summary: ' + error);
+            }
+        }
+
+        async function toggleRankOverride(paperId) {
+            const currentRank = prompt('Enter a custom rank (0-10) for this paper, or leave empty to clear:');
+
+            if (currentRank === null) return; // User cancelled
+
+            const rank = currentRank.trim() === '' ? null : parseFloat(currentRank);
+
+            if (rank !== null && (isNaN(rank) || rank < 0 || rank > 10)) {
+                alert('Please enter a number between 0 and 10');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/paper/${paperId}/rank`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({rank: rank})
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message + '. Reloading to show updated ranking...');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error setting rank: ' + error);
+            }
+        }
+
+        loadStats();
+    </script>
+</body>
+</html>

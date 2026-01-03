@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking Preferences - AI Alignment Papers</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Ranking Preferences</h1>
+        <p class="subtitle">Customize how papers are ranked based on affiliations</p>
+        <nav>
+            <a href="/" class="nav-link">← Back to Papers</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="preferences-intro">
+            <h2>How Ranking Works</h2>
+            <p>Papers are ranked based on author affiliations. Higher scores indicate more prominent or trusted organizations. You can add custom affiliations and adjust scores to match your preferences.</p>
+            <p><strong>Score Range:</strong> 0-10 (10 = highest priority)</p>
+        </div>
+
+        <div class="learning-insights">
+            <h2>Learning from Your Feedback</h2>
+            <div id="learningReport">
+                <p class="loading">Loading insights...</p>
+            </div>
+        </div>
+
+        <div class="add-preference-form">
+            <h2>Add New Affiliation</h2>
+            <div class="form-group">
+                <input type="text" id="newAffiliationName" placeholder="Organization name (e.g., 'MIT', 'OpenAI')" />
+                <input type="number" id="newAffiliationScore" placeholder="Score (0-10)" min="0" max="10" step="0.5" value="5" />
+                <button onclick="addPreference()" class="btn btn-primary">Add Affiliation</button>
+            </div>
+        </div>
+
+        <div class="preferences-list">
+            <h2>Current Affiliation Rankings</h2>
+            <div class="filter-tabs">
+                <button onclick="filterPreferences('all')" class="tab-btn active" data-filter="all">All</button>
+                <button onclick="filterPreferences('custom')" class="tab-btn" data-filter="custom">Custom Only</button>
+                <button onclick="filterPreferences('default')" class="tab-btn" data-filter="default">Defaults Only</button>
+            </div>
+            <div id="preferencesList"></div>
+        </div>
+    </div>
+
+    <script>
+        let allPreferences = [];
+        let currentFilter = 'all';
+
+        async function loadPreferences() {
+            try {
+                const response = await fetch('/api/preferences');
+                const data = await response.json();
+                allPreferences = data.preferences;
+                renderPreferences();
+            } catch (error) {
+                console.error('Error loading preferences:', error);
+                alert('Error loading preferences');
+            }
+        }
+
+        function renderPreferences() {
+            const container = document.getElementById('preferencesList');
+            let filteredPrefs = allPreferences;
+
+            if (currentFilter === 'custom') {
+                filteredPrefs = allPreferences.filter(p => p.is_custom);
+            } else if (currentFilter === 'default') {
+                filteredPrefs = allPreferences.filter(p => !p.is_custom);
+            }
+
+            if (filteredPrefs.length === 0) {
+                container.innerHTML = '<p class="no-prefs">No preferences found for this filter.</p>';
+                return;
+            }
+
+            container.innerHTML = filteredPrefs.map(pref => `
+                <div class="preference-item" data-custom="${pref.is_custom}">
+                    <div class="pref-info">
+                        <span class="pref-name">${pref.name}</span>
+                        ${pref.is_custom ? '<span class="custom-badge">Custom</span>' : '<span class="default-badge">Default</span>'}
+                    </div>
+                    <div class="pref-controls">
+                        <input type="number"
+                               class="pref-score-input"
+                               value="${pref.score}"
+                               min="0"
+                               max="10"
+                               step="0.5"
+                               onchange="updatePreference('${pref.name}', this.value)" />
+                        ${pref.is_custom ? `<button onclick="deletePreference('${pref.name}')" class="btn-delete">Delete</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterPreferences(filter) {
+            currentFilter = filter;
+
+            // Update active tab
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('active');
+                }
+            });
+
+            renderPreferences();
+        }
+
+        async function addPreference() {
+            const name = document.getElementById('newAffiliationName').value.trim();
+            const score = parseFloat(document.getElementById('newAffiliationScore').value);
+
+            if (!name) {
+                alert('Please enter an affiliation name');
+                return;
+            }
+
+            if (isNaN(score) || score < 0 || score > 10) {
+                alert('Score must be between 0 and 10');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/preferences', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        affiliation_name: name,
+                        rank_score: score
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    document.getElementById('newAffiliationName').value = '';
+                    document.getElementById('newAffiliationScore').value = '5';
+                    loadPreferences();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error adding preference: ' + error);
+            }
+        }
+
+        async function updatePreference(name, score) {
+            try {
+                const response = await fetch('/api/preferences', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        affiliation_name: name,
+                        rank_score: parseFloat(score)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadPreferences();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error updating preference: ' + error);
+            }
+        }
+
+        async function deletePreference(name) {
+            if (!confirm(`Are you sure you want to delete the preference for "${name}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/preferences/${encodeURIComponent(name)}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    loadPreferences();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error deleting preference: ' + error);
+            }
+        }
+
+        async function loadLearningReport() {
+            try {
+                const response = await fetch('/api/learning-report');
+                const data = await response.json();
+
+                if (data.success) {
+                    const report = data.report;
+                    const container = document.getElementById('learningReport');
+
+                    let html = '<div class="insights-grid">';
+
+                    // Summary ratings
+                    html += `
+                        <div class="insight-card">
+                            <h3>Summary Quality</h3>
+                            <div class="metric">
+                                <span class="metric-value">${report.feedback_summary.average_rating.toFixed(1)}</span>
+                                <span class="metric-label">/ 5.0 Average Rating</span>
+                            </div>
+                            <p>${report.feedback_summary.total_ratings} summaries rated</p>
+                        </div>
+                    `;
+
+                    // Ranking preferences
+                    html += `
+                        <div class="insight-card">
+                            <h3>Ranking Adjustments</h3>
+                            <div class="metric">
+                                <span class="metric-value">${report.feedback_summary.total_rank_adjustments}</span>
+                                <span class="metric-label">Manual Adjustments</span>
+                            </div>
+                            <p>${report.ranking_preferences.total_overrides} papers with custom ranks</p>
+                        </div>
+                    `;
+
+                    // Preferred sources
+                    if (report.ranking_preferences.boosted_affiliations.length > 0) {
+                        html += `
+                            <div class="insight-card">
+                                <h3>You Prefer Papers From</h3>
+                                <ul class="affiliation-list">
+                                    ${report.ranking_preferences.boosted_affiliations.slice(0, 5).map(aff =>
+                                        `<li>${aff}</li>`
+                                    ).join('')}
+                                </ul>
+                            </div>
+                        `;
+                    }
+
+                    // Summary improvements
+                    if (report.summary_preferences.prompt_enhancements) {
+                        html += `
+                            <div class="insight-card full-width">
+                                <h3>AI Learning Insights</h3>
+                                <p class="enhancement-text">${report.summary_preferences.prompt_enhancements}</p>
+                                <p class="hint">Future summaries will be tailored based on these preferences.</p>
+                            </div>
+                        `;
+                    }
+
+                    html += '</div>';
+
+                    if (report.feedback_summary.total_ratings === 0 && report.feedback_summary.total_rank_adjustments === 0) {
+                        html = `<p class="no-feedback">No feedback collected yet. Start rating summaries and adjusting rankings to help the system learn your preferences!</p>`;
+                    }
+
+                    container.innerHTML = html;
+                } else {
+                    document.getElementById('learningReport').innerHTML =
+                        '<p class="error">Could not load learning insights.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading learning report:', error);
+                document.getElementById('learningReport').innerHTML =
+                    '<p class="error">Error loading insights.</p>';
+            }
+        }
+
+        // Load preferences and learning report on page load
+        loadPreferences();
+        loadLearningReport();
+    </script>
+</body>
+</html>
