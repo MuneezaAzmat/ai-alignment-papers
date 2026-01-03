@@ -8,6 +8,7 @@ An automated web application that monitors the latest AI alignment research pape
 
 ### Core Functionality
 - **Automatic Paper Fetching**: Retrieves AI alignment papers from arXiv based on relevant keywords
+- **Manual Paper Addition**: Add specific papers by arXiv ID or URL that weren't automatically fetched
 - **Intelligent Ranking**: Papers are ranked by author affiliations (OpenAI, Anthropic, Google DeepMind, etc.)
 - **AI-Powered Summaries**: Claude generates concise, accessible summaries of each paper
 - **Scheduled Updates**: Background scheduler checks for new papers at configurable intervals
