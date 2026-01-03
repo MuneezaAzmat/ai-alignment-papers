@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, jsonify, request
-from app.database import get_session, Paper, AffiliationPreference, UserFeedback
+from app.database import get_session, Paper, AffiliationPreference, UserFeedback, FavoritePaper
 from app.fetcher import fetch_recent_papers
 from app.summarizer import summarize_papers
 from app.ranker import rank_papers, recalculate_paper_ranks, get_user_preferences
@@ -263,3 +263,139 @@ def learning_report():
         return jsonify({'success': True, 'report': report})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@main.route('/favorites')
+def favorites_page():
+    """Favorites page showing all bookmarked papers."""
+    return render_template('favorites.html')
+
+@main.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    """Get all favorite papers with their details."""
+    session = get_session()
+
+    favorites = session.query(FavoritePaper).order_by(FavoritePaper.personal_rank.desc()).all()
+
+    result = []
+    for fav in favorites:
+        # Get paper details
+        paper = session.query(Paper).filter_by(id=fav.paper_id).first()
+        if paper:
+            authors_list = json.loads(paper.authors)
+            affiliations_list = json.loads(paper.affiliations) if paper.affiliations else []
+            tags_list = json.loads(fav.tags) if fav.tags else []
+
+            result.append({
+                'favorite_id': fav.id,
+                'paper_id': fav.paper_id,
+                'personal_rank': fav.personal_rank,
+                'notes': fav.notes,
+                'tags': tags_list,
+                'favorited_date': fav.favorited_date.strftime('%Y-%m-%d'),
+                'paper': {
+                    'title': paper.title,
+                    'authors': authors_list,
+                    'affiliations': affiliations_list,
+                    'abstract': paper.abstract,
+                    'summary': paper.summary,
+                    'published_date': paper.published_date.strftime('%Y-%m-%d'),
+                    'arxiv_url': paper.arxiv_url,
+                    'pdf_url': paper.pdf_url,
+                    'rank_score': paper.rank_score
+                }
+            })
+
+    session.close()
+    return jsonify({'success': True, 'favorites': result})
+
+@main.route('/api/favorites/<string:paper_id>', methods=['POST'])
+def add_favorite(paper_id):
+    """Add a paper to favorites."""
+    data = request.json
+    personal_rank = data.get('personal_rank', 5.0)
+    notes = data.get('notes', '')
+    tags = data.get('tags', [])
+
+    session = get_session()
+
+    # Check if paper exists
+    paper = session.query(Paper).filter_by(id=paper_id).first()
+    if not paper:
+        session.close()
+        return jsonify({'success': False, 'message': 'Paper not found'}), 404
+
+    # Check if already favorited
+    existing = session.query(FavoritePaper).filter_by(paper_id=paper_id).first()
+    if existing:
+        session.close()
+        return jsonify({'success': False, 'message': 'Paper already in favorites'}), 400
+
+    # Create favorite
+    favorite = FavoritePaper(
+        paper_id=paper_id,
+        personal_rank=personal_rank,
+        notes=notes,
+        tags=json.dumps(tags)
+    )
+    session.add(favorite)
+    session.commit()
+    session.close()
+
+    return jsonify({'success': True, 'message': 'Added to favorites'})
+
+@main.route('/api/favorites/<string:paper_id>', methods=['PUT'])
+def update_favorite(paper_id):
+    """Update a favorite paper's details."""
+    data = request.json
+
+    session = get_session()
+
+    favorite = session.query(FavoritePaper).filter_by(paper_id=paper_id).first()
+    if not favorite:
+        session.close()
+        return jsonify({'success': False, 'message': 'Favorite not found'}), 404
+
+    # Update fields
+    if 'personal_rank' in data:
+        favorite.personal_rank = float(data['personal_rank'])
+    if 'notes' in data:
+        favorite.notes = data['notes']
+    if 'tags' in data:
+        favorite.tags = json.dumps(data['tags'])
+
+    session.commit()
+    session.close()
+
+    return jsonify({'success': True, 'message': 'Favorite updated'})
+
+@main.route('/api/favorites/<string:paper_id>', methods=['DELETE'])
+def remove_favorite(paper_id):
+    """Remove a paper from favorites."""
+    session = get_session()
+
+    favorite = session.query(FavoritePaper).filter_by(paper_id=paper_id).first()
+    if not favorite:
+        session.close()
+        return jsonify({'success': False, 'message': 'Favorite not found'}), 404
+
+    session.delete(favorite)
+    session.commit()
+    session.close()
+
+    return jsonify({'success': True, 'message': 'Removed from favorites'})
+
+@main.route('/api/favorites/<string:paper_id>/check', methods=['GET'])
+def check_favorite(paper_id):
+    """Check if a paper is favorited."""
+    session = get_session()
+    favorite = session.query(FavoritePaper).filter_by(paper_id=paper_id).first()
+    session.close()
+
+    return jsonify({
+        'is_favorite': favorite is not None,
+        'details': {
+            'personal_rank': favorite.personal_rank,
+            'notes': favorite.notes,
+            'tags': json.loads(favorite.tags) if favorite.tags else []
+        } if favorite else None
+    })

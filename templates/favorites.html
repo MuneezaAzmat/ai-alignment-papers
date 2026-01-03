@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Favorites - AI Alignment Papers</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>My Favorite Papers</h1>
+        <p class="subtitle">Your curated collection of important papers</p>
+        <nav>
+            <a href="/" class="nav-link">← Back to All Papers</a>
+            <a href="/preferences" class="nav-link">⚙️ Manage Rankings</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="favorites-stats">
+            <div class="stat-card">
+                <span class="stat-value" id="totalFavorites">0</span>
+                <span class="stat-label">Favorite Papers</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="avgRank">0.0</span>
+                <span class="stat-label">Average Personal Rank</span>
+            </div>
+        </div>
+
+        <div class="favorites-list" id="favoritesList">
+            <p class="loading">Loading your favorites...</p>
+        </div>
+    </div>
+
+    <script>
+        async function loadFavorites() {
+            try {
+                const response = await fetch('/api/favorites');
+                const data = await response.json();
+
+                if (data.success) {
+                    const favorites = data.favorites;
+                    const container = document.getElementById('favoritesList');
+
+                    // Update stats
+                    document.getElementById('totalFavorites').textContent = favorites.length;
+                    const avgRank = favorites.length > 0
+                        ? (favorites.reduce((sum, f) => sum + f.personal_rank, 0) / favorites.length).toFixed(1)
+                        : '0.0';
+                    document.getElementById('avgRank').textContent = avgRank;
+
+                    if (favorites.length === 0) {
+                        container.innerHTML = `
+                            <div class="no-favorites">
+                                <h3>No favorites yet!</h3>
+                                <p>Start adding papers to your favorites from the <a href="/">main page</a>.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Render favorites
+                    container.innerHTML = favorites.map(fav => `
+                        <article class="favorite-card">
+                            <div class="favorite-header">
+                                <h2 class="paper-title">
+                                    <a href="${fav.paper.arxiv_url}" target="_blank">${fav.paper.title}</a>
+                                </h2>
+                                <div class="favorite-rank">
+                                    <span class="rank-label">Your Rank:</span>
+                                    <input type="number"
+                                           class="rank-input"
+                                           value="${fav.personal_rank}"
+                                           min="0"
+                                           max="10"
+                                           step="0.5"
+                                           onchange="updateRank('${fav.paper_id}', this.value)">
+                                    <span class="rank-badge">/ 10</span>
+                                </div>
+                            </div>
+
+                            <div class="paper-meta">
+                                <div class="authors">
+                                    <strong>Authors:</strong> ${fav.paper.authors.join(', ')}
+                                </div>
+                                ${fav.paper.affiliations.length > 0 ? `
+                                <div class="affiliations">
+                                    <strong>Affiliations:</strong> ${fav.paper.affiliations.join(', ')}
+                                </div>
+                                ` : ''}
+                                <div class="date">
+                                    <strong>Published:</strong> ${fav.paper.published_date} |
+                                    <strong>Favorited:</strong> ${fav.favorited_date}
+                                </div>
+                            </div>
+
+                            <div class="favorite-notes">
+                                <h3>Personal Notes</h3>
+                                <textarea class="notes-input"
+                                          placeholder="Add your notes about this paper..."
+                                          onchange="updateNotes('${fav.paper_id}', this.value)">${fav.notes || ''}</textarea>
+                            </div>
+
+                            ${fav.paper.summary ? `
+                            <div class="summary">
+                                <h3>Summary</h3>
+                                <p>${fav.paper.summary}</p>
+                            </div>
+                            ` : ''}
+
+                            <details class="abstract-details">
+                                <summary>View Abstract</summary>
+                                <div class="abstract">${fav.paper.abstract}</div>
+                            </details>
+
+                            <div class="favorite-actions">
+                                <a href="${fav.paper.arxiv_url}" target="_blank" class="link-btn">arXiv</a>
+                                <a href="${fav.paper.pdf_url}" target="_blank" class="link-btn">PDF</a>
+                                <button onclick="removeFavorite('${fav.paper_id}')" class="btn-remove">
+                                    Remove from Favorites
+                                </button>
+                            </div>
+                        </article>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p class="error">Error loading favorites.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading favorites:', error);
+                document.getElementById('favoritesList').innerHTML =
+                    '<p class="error">Error loading favorites.</p>';
+            }
+        }
+
+        async function updateRank(paperId, newRank) {
+            try {
+                const response = await fetch(`/api/favorites/${paperId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({personal_rank: parseFloat(newRank)})
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // Reload to update stats and sorting
+                    loadFavorites();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error updating rank: ' + error);
+            }
+        }
+
+        async function updateNotes(paperId, notes) {
+            try {
+                const response = await fetch(`/api/favorites/${paperId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({notes: notes})
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error updating notes: ' + error);
+            }
+        }
+
+        async function removeFavorite(paperId) {
+            if (!confirm('Remove this paper from your favorites?')) return;
+
+            try {
+                const response = await fetch(`/api/favorites/${paperId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    loadFavorites();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error removing favorite: ' + error);
+            }
+        }
+
+        // Load favorites on page load
+        loadFavorites();
+    </script>
+</body>
+</html>

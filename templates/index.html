@@ -11,6 +11,7 @@
         <h1>AI Alignment Research Papers</h1>
         <p class="subtitle">Curated and ranked papers from arXiv</p>
         <nav>
+            <a href="/favorites" class="nav-link">⭐ My Favorites</a>
             <a href="/preferences" class="nav-link">⚙️ Manage Rankings</a>
         </nav>
     </header>
@@ -93,7 +94,13 @@
                             <a href="{{ paper.arxiv_url }}" target="_blank" class="link-btn">arXiv</a>
                             <a href="{{ paper.pdf_url }}" target="_blank" class="link-btn">PDF</a>
                         </div>
-                        <div class="rank-override">
+                        <div class="paper-controls">
+                            <button onclick="toggleFavorite('{{ paper.id }}')"
+                                    class="btn-favorite"
+                                    id="fav-btn-{{ paper.id }}"
+                                    data-paper-id="{{ paper.id }}">
+                                ☆ Add to Favorites
+                            </button>
                             <button onclick="toggleRankOverride('{{ paper.id }}')" class="btn-small">
                                 {% if paper.user_rank_override %}✓ Custom Rank{% else %}Set Custom Rank{% endif %}
                             </button>
@@ -233,7 +240,75 @@
             }
         }
 
+        async function toggleFavorite(paperId) {
+            const btn = document.getElementById(`fav-btn-${paperId}`);
+
+            // Check if already favorited
+            try {
+                const checkResponse = await fetch(`/api/favorites/${paperId}/check`);
+                const checkData = await checkResponse.json();
+
+                if (checkData.is_favorite) {
+                    // Remove from favorites
+                    if (confirm('Remove this paper from your favorites?')) {
+                        const response = await fetch(`/api/favorites/${paperId}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            btn.textContent = '☆ Add to Favorites';
+                            btn.classList.remove('favorited');
+                        }
+                    }
+                } else {
+                    // Add to favorites - show dialog for personal rank
+                    const rank = prompt('Enter your personal ranking for this paper (0-10):', '7');
+                    if (rank === null) return;
+
+                    const response = await fetch(`/api/favorites/${paperId}`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            personal_rank: parseFloat(rank) || 5.0
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        btn.textContent = '★ Favorited';
+                        btn.classList.add('favorited');
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                }
+            } catch (error) {
+                alert('Error toggling favorite: ' + error);
+            }
+        }
+
+        // Check favorite status for all papers on load
+        async function loadFavoriteStatuses() {
+            const buttons = document.querySelectorAll('.btn-favorite');
+            for (const btn of buttons) {
+                const paperId = btn.dataset.paperId;
+                try {
+                    const response = await fetch(`/api/favorites/${paperId}/check`);
+                    const data = await response.json();
+
+                    if (data.is_favorite) {
+                        btn.textContent = '★ Favorited';
+                        btn.classList.add('favorited');
+                    }
+                } catch (error) {
+                    console.error('Error checking favorite status:', error);
+                }
+            }
+        }
+
         loadStats();
+        loadFavoriteStatuses();
     </script>
 </body>
 </html>

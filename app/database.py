@@ -51,6 +51,20 @@ class UserFeedback(Base):
     def __repr__(self):
         return f"<UserFeedback(paper_id='{self.paper_id}', type='{self.feedback_type}')>"
 
+class FavoritePaper(Base):
+    __tablename__ = 'favorite_papers'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(String, nullable=False, unique=True)  # arXiv ID
+    personal_rank = Column(Float, default=5.0)  # User's personal ranking (0-10)
+    notes = Column(Text)  # Personal notes about the paper
+    tags = Column(Text)  # JSON list of custom tags
+    favorited_date = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<FavoritePaper(paper_id='{self.paper_id}', rank={self.personal_rank})>"
+
 engine = create_engine(f'sqlite:///{DATABASE_PATH}')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
