@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Alignment Papers</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- MathJax for rendering LaTeX mathematical notation -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
 </head>
 <body>
     <header>
@@ -104,9 +115,6 @@
                         <div class="paper-links">
                             <a href="{{ paper.arxiv_url }}" target="_blank" class="link-btn">arXiv</a>
                             <a href="{{ paper.pdf_url }}" target="_blank" class="link-btn">PDF</a>
-                            <button onclick="openPaperViewer('{{ paper.id }}', '{{ paper.pdf_url }}')" class="link-btn viewer-btn">
-                                📄 View Paper
-                            </button>
                         </div>
                         <div class="paper-controls">
                             <button onclick="toggleFavorite('{{ paper.id }}')"
@@ -127,19 +135,6 @@
                     <p>No papers found. Click "Fetch New Papers" to get started!</p>
                 </div>
             {% endif %}
-        </div>
-    </div>
-
-    <!-- Paper Viewer Modal -->
-    <div id="paperViewerModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Paper Viewer</h2>
-                <button onclick="closePaperViewer()" class="modal-close">×</button>
-            </div>
-            <div class="modal-body">
-                <iframe id="pdfViewer" width="100%" height="600px" frameborder="0"></iframe>
-            </div>
         </div>
     </div>
 
@@ -399,6 +394,10 @@
 
                 if (data.success) {
                     location.reload();
+                    // Trigger MathJax rendering after page reload
+                    if (typeof MathJax !== 'undefined') {
+                        MathJax.typesetPromise();
+                    }
                 } else {
                     alert('Error: ' + data.message);
                     btn.disabled = false;
@@ -416,34 +415,15 @@
             await generateSummary(paperId);
         }
 
-        function openPaperViewer(paperId, pdfUrl) {
-            const modal = document.getElementById('paperViewerModal');
-            const viewer = document.getElementById('pdfViewer');
-
-            // Use PDF.js viewer or embed directly
-            viewer.src = pdfUrl;
-
-            modal.style.display = 'block';
-        }
-
-        function closePaperViewer() {
-            const modal = document.getElementById('paperViewerModal');
-            const viewer = document.getElementById('pdfViewer');
-
-            modal.style.display = 'none';
-            viewer.src = '';
-        }
-
-        // Close modal on outside click
-        window.onclick = function(event) {
-            const modal = document.getElementById('paperViewerModal');
-            if (event.target == modal) {
-                closePaperViewer();
-            }
-        }
-
         loadStats();
         loadFavoriteStatuses();
+
+        // Initialize MathJax rendering on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof MathJax !== 'undefined') {
+                MathJax.typesetPromise().catch((err) => console.log('MathJax error:', err));
+            }
+        });
     </script>
 </body>
 </html>

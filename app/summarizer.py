@@ -11,7 +11,9 @@ SUMMARY_TYPES = {
 3. Main findings or contributions
 4. Relevance to AI alignment and safety
 
-Provide a clear, accessible summary in 3-4 paragraphs suitable for researchers and practitioners."""
+Provide a clear, accessible summary in 3-4 paragraphs suitable for researchers and practitioners.
+
+IMPORTANT: Use LaTeX mathematical notation where appropriate. Use $...$ for inline math (e.g., $x^2$) and $$...$$ for display equations (e.g., $$\\sum_{i=1}^n x_i$$)."""
     },
     'technical': {
         'name': 'Technical Details',
@@ -21,7 +23,9 @@ Provide a clear, accessible summary in 3-4 paragraphs suitable for researchers a
 3. Technical challenges and how they were addressed
 4. Experimental setup and evaluation metrics
 
-Include technical depth suitable for researchers implementing similar work."""
+Include technical depth suitable for researchers implementing similar work.
+
+IMPORTANT: Use LaTeX mathematical notation for all equations, formulas, and mathematical expressions. Use $...$ for inline math and $$...$$ for display equations."""
     },
     'mathematical': {
         'name': 'Mathematical Analysis',
@@ -31,7 +35,9 @@ Include technical depth suitable for researchers implementing similar work."""
 3. Mathematical properties and guarantees
 4. Formal analysis and complexity
 
-Emphasize mathematical rigor and formal aspects."""
+Emphasize mathematical rigor and formal aspects.
+
+CRITICAL: Use extensive LaTeX mathematical notation. Write all equations, theorems, proofs, and mathematical expressions using LaTeX. Use $...$ for inline math and $$...$$ for display equations."""
     },
     'takeaway': {
         'name': 'Key Takeaways',
@@ -41,7 +47,9 @@ Emphasize mathematical rigor and formal aspects."""
 3. Practical implications for AI alignment
 4. What readers should remember
 
-Be brief and action-oriented, suitable for quick scanning."""
+Be brief and action-oriented, suitable for quick scanning.
+
+Use LaTeX notation for any mathematical expressions (e.g., $x$, $$y = f(x)$$)."""
     },
     'novelty': {
         'name': 'Novel Contributions',
@@ -51,7 +59,9 @@ Be brief and action-oriented, suitable for quick scanning."""
 3. Unique insights or perspectives
 4. Advances over the state-of-the-art
 
-Emphasize what makes this work original and innovative."""
+Emphasize what makes this work original and innovative.
+
+Use LaTeX notation for any mathematical expressions where relevant."""
     },
     'practical': {
         'name': 'Practical Implications',
@@ -61,7 +71,9 @@ Emphasize what makes this work original and innovative."""
 3. Limitations and practical constraints
 4. How this can be applied in practice
 
-Focus on actionable insights for practitioners."""
+Focus on actionable insights for practitioners.
+
+Use LaTeX notation for any mathematical expressions or technical formulas."""
     }
 }
 
