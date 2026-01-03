@@ -65,6 +65,21 @@ class FavoritePaper(Base):
     def __repr__(self):
         return f"<FavoritePaper(paper_id='{self.paper_id}', rank={self.personal_rank})>"
 
+class PaperHighlight(Base):
+    __tablename__ = 'paper_highlights'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    paper_id = Column(String, nullable=False)  # arXiv ID
+    highlight_text = Column(Text, nullable=False)  # The highlighted text content
+    page_number = Column(Integer, nullable=False)  # PDF page number
+    position_data = Column(Text)  # JSON with coordinates and selection data
+    color = Column(String, default='yellow')  # Highlight color
+    note = Column(Text)  # Optional user note for this highlight
+    created_date = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<PaperHighlight(paper_id='{self.paper_id}', page={self.page_number})>"
+
 engine = create_engine(f'sqlite:///{DATABASE_PATH}')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)

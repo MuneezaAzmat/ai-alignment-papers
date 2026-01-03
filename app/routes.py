@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, jsonify, request
-from app.database import get_session, Paper, AffiliationPreference, UserFeedback, FavoritePaper
+from app.database import get_session, Paper, AffiliationPreference, UserFeedback, FavoritePaper, PaperHighlight
 from app.fetcher import fetch_recent_papers, fetch_paper_by_id, extract_arxiv_id
 from app.summarizer import summarize_papers
 from app.ranker import rank_papers, recalculate_paper_ranks, get_user_preferences
@@ -470,3 +470,177 @@ def get_summary_types():
     ]
 
     return jsonify({'summary_types': types})
+
+@main.route('/paper/<string:paper_id>/viewer')
+def paper_viewer(paper_id):
+    """Interactive paper viewer with highlighting."""
+    session = get_session()
+    paper = session.query(Paper).filter_by(id=paper_id).first()
+
+    if not paper:
+        session.close()
+        return "Paper not found", 404
+
+    authors_list = json.loads(paper.authors)
+
+    paper_data = {
+        'id': paper.id,
+        'title': paper.title,
+        'authors': authors_list,
+        'abstract': paper.abstract,
+        'summary': paper.summary,
+        'pdf_url': paper.pdf_url
+    }
+
+    session.close()
+    return render_template('paper_viewer.html', paper=paper_data)
+
+@main.route('/api/paper/<string:paper_id>/highlight', methods=['POST'])
+def save_highlight(paper_id):
+    """Save a highlighted text selection."""
+    data = request.json
+    text = data.get('text', '').strip()
+    page = data.get('page', 1)
+
+    if not text:
+        return jsonify({'success': False, 'message': 'No text provided'}), 400
+
+    session = get_session()
+
+    # Verify paper exists
+    paper = session.query(Paper).filter_by(id=paper_id).first()
+    if not paper:
+        session.close()
+        return jsonify({'success': False, 'message': 'Paper not found'}), 404
+
+    # Create highlight
+    highlight = PaperHighlight(
+        paper_id=paper_id,
+        highlight_text=text,
+        page_number=page
+    )
+
+    session.add(highlight)
+    session.commit()
+
+    highlight_id = highlight.id
+    session.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'Highlight saved',
+        'highlight_id': highlight_id
+    })
+
+@main.route('/api/paper/<string:paper_id>/highlights', methods=['GET'])
+def get_highlights(paper_id):
+    """Get all highlights for a paper."""
+    session = get_session()
+
+    highlights = session.query(PaperHighlight).filter_by(paper_id=paper_id).order_by(PaperHighlight.page_number).all()
+
+    result = [{
+        'id': h.id,
+        'highlight_text': h.highlight_text,
+        'page_number': h.page_number,
+        'note': h.note
+    } for h in highlights]
+
+    session.close()
+    return jsonify({'success': True, 'highlights': result})
+
+@main.route('/api/paper/<string:paper_id>/highlight/<int:highlight_id>', methods=['DELETE'])
+def delete_highlight(paper_id, highlight_id):
+    """Delete a highlight."""
+    session = get_session()
+
+    highlight = session.query(PaperHighlight).filter_by(id=highlight_id, paper_id=paper_id).first()
+
+    if not highlight:
+        session.close()
+        return jsonify({'success': False, 'message': 'Highlight not found'}), 404
+
+    session.delete(highlight)
+    session.commit()
+    session.close()
+
+    return jsonify({'success': True, 'message': 'Highlight deleted'})
+
+@main.route('/api/paper/<string:paper_id>/summary-from-highlights', methods=['POST'])
+def generate_summary_from_highlights(paper_id):
+    """Generate a summary based on user highlights."""
+    from app.summarizer import generate_summary
+
+    session = get_session()
+
+    paper = session.query(Paper).filter_by(id=paper_id).first()
+    if not paper:
+        session.close()
+        return jsonify({'success': False, 'message': 'Paper not found'}), 404
+
+    highlights = session.query(PaperHighlight).filter_by(paper_id=paper_id).order_by(PaperHighlight.page_number).all()
+
+    if not highlights:
+        session.close()
+        return jsonify({'success': False, 'message': 'No highlights found. Please highlight some text first.'}), 400
+
+    # Combine highlights into context
+    highlighted_text = "\n\n".join([
+        f"[Page {h.page_number}] {h.highlight_text}"
+        for h in highlights
+    ])
+
+    authors_list = json.loads(paper.authors)
+
+    # Generate summary with highlighted text as additional context
+    try:
+        import anthropic
+        from app.config import ANTHROPIC_API_KEY
+
+        if not ANTHROPIC_API_KEY:
+            session.close()
+            return jsonify({'success': False, 'message': 'No API key configured'}), 500
+
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        prompt = f"""Generate a comprehensive summary of this AI alignment research paper based on the user's highlighted passages.
+
+Paper Title: {paper.title}
+Authors: {', '.join(authors_list)}
+
+Abstract: {paper.abstract}
+
+User's Highlighted Passages:
+{highlighted_text}
+
+Please provide a detailed summary that:
+1. Focuses on the concepts and findings from the highlighted passages
+2. Maintains the technical depth appropriate for researchers
+3. Uses LaTeX notation for mathematical expressions (inline: $...$, display: $$...$$)
+4. Explains how the highlighted sections relate to the overall contribution
+5. Provides context for why these passages are significant
+
+Write the summary in a clear, well-structured format."""
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        summary = message.content[0].text
+
+        # Update paper with new summary
+        paper.summary = summary
+        session.commit()
+        session.close()
+
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'highlights_used': len(highlights)
+        })
+
+    except Exception as e:
+        session.close()
+        return jsonify({'success': False, 'message': str(e)}), 500

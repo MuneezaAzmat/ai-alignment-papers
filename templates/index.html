@@ -115,6 +115,9 @@
                         <div class="paper-links">
                             <a href="{{ paper.arxiv_url }}" target="_blank" class="link-btn">arXiv</a>
                             <a href="{{ paper.pdf_url }}" target="_blank" class="link-btn">PDF</a>
+                            <a href="/paper/{{ paper.id }}/viewer" class="link-btn viewer-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                📄 Interactive Viewer
+                            </a>
                         </div>
                         <div class="paper-controls">
                             <button onclick="toggleFavorite('{{ paper.id }}')"

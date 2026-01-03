@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ paper.title }} - Interactive Viewer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- MathJax for rendering LaTeX -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .viewer-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            height: 100vh;
+            gap: 0;
+        }
+
+        .pdf-panel {
+            background: #525252;
+            overflow-y: auto;
+            position: relative;
+            padding: 20px;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            border-left: 1px solid #dee2e6;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 2px solid #dee2e6;
+            background: white;
+        }
+
+        .sidebar-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+
+        .paper-title-compact {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .viewer-tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            background: #e9ecef;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-content {
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        #pdf-canvas {
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: white;
+        }
+
+        .pdf-controls {
+            position: sticky;
+            top: 0;
+            background: #525252;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .pdf-controls button {
+            padding: 8px 16px;
+            background: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .pdf-controls button:hover {
+            background: #e9ecef;
+        }
+
+        .pdf-controls button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            color: white;
+            font-size: 0.9em;
+        }
+
+        .highlight-item {
+            background: white;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .highlight-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .highlight-text {
+            font-size: 0.9em;
+            color: #333;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .highlight-meta {
+            font-size: 0.8em;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .highlight-delete {
+            color: #dc3545;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .highlight-delete:hover {
+            text-decoration: underline;
+        }
+
+        .summary-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-bottom: 15px;
+        }
+
+        .generate-btn:hover {
+            opacity: 0.9;
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .summary-content {
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .no-highlights {
+            text-align: center;
+            color: #666;
+            padding: 40px 20px;
+        }
+
+        .highlight-instructions {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            color: #856404;
+        }
+
+        .back-link {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .back-link:hover {
+            background: #5a6268;
+        }
+
+        /* Text selection overlay */
+        .text-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            opacity: 0.2;
+            line-height: 1.0;
+        }
+
+        .text-layer > span {
+            color: transparent;
+            position: absolute;
+            white-space: pre;
+            cursor: text;
+            transform-origin: 0% 0%;
+        }
+
+        ::selection {
+            background: rgba(255, 193, 7, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="viewer-container">
+        <!-- PDF Panel -->
+        <div class="pdf-panel">
+            <div class="pdf-controls">
+                <button onclick="goToPrevPage()" id="prev-btn">← Previous</button>
+                <span class="page-info">
+                    Page <span id="page-num">1</span> / <span id="page-count">?</span>
+                </span>
+                <button onclick="goToNextPage()" id="next-btn">Next →</button>
+                <button onclick="highlightSelection()" id="highlight-btn" style="background: #ffc107; margin-left: 20px;">
+                    ✨ Highlight Selected Text
+                </button>
+            </div>
+            <div id="pdf-container"></div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <a href="/" class="back-link">← Back to Papers</a>
+                <h2>{{ paper.title }}</h2>
+                <div class="paper-title-compact">
+                    <strong>Authors:</strong> {{ paper.authors|join(', ') }}
+                </div>
+
+                <div class="viewer-tabs">
+                    <button class="tab-btn active" onclick="switchTab('highlights')">Highlights</button>
+                    <button class="tab-btn" onclick="switchTab('summary')">Summary</button>
+                </div>
+            </div>
+
+            <div class="tab-content">
+                <!-- Highlights Tab -->
+                <div id="highlights-tab" class="tab-panel active">
+                    <div class="highlight-instructions">
+                        💡 Select text in the PDF and click "Highlight Selected Text" to save important passages.
+                    </div>
+
+                    <div id="highlights-list">
+                        <div class="no-highlights">No highlights yet. Start highlighting text in the PDF!</div>
+                    </div>
+                </div>
+
+                <!-- Summary Tab -->
+                <div id="summary-tab" class="tab-panel">
+                    <button class="generate-btn" onclick="generateSummaryFromHighlights()" id="gen-summary-btn">
+                        ✨ Generate Summary from Highlights
+                    </button>
+
+                    <div id="summary-container">
+                        {% if paper.summary %}
+                        <div class="summary-box">
+                            <h3>Current Summary</h3>
+                            <div class="summary-content">{{ paper.summary }}</div>
+                        </div>
+                        {% else %}
+                        <div class="no-highlights">
+                            No summary yet. Add highlights and generate a summary!
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const paperId = '{{ paper.id }}';
+        const pdfUrl = '{{ paper.pdf_url }}';
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let currentScale = 1.5;
+
+        // Load PDF
+        pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+            pdfDoc = pdf;
+            document.getElementById('page-count').textContent = pdf.numPages;
+            renderPage(pageNum);
+        }).catch(function(error) {
+            console.error('Error loading PDF:', error);
+            alert('Error loading PDF. The file may not be accessible.');
+        });
+
+        function renderPage(num) {
+            pageRendering = true;
+
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({ scale: currentScale });
+                const container = document.getElementById('pdf-container');
+                container.innerHTML = '';
+
+                const canvas = document.createElement('canvas');
+                canvas.id = 'pdf-canvas';
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                container.appendChild(canvas);
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                const renderTask = page.render(renderContext);
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+
+                    // Render text layer for selection
+                    return page.getTextContent();
+                }).then(function(textContent) {
+                    // Enable text selection
+                    const textLayer = document.createElement('div');
+                    textLayer.className = 'text-layer';
+                    textLayer.style.width = canvas.width + 'px';
+                    textLayer.style.height = canvas.height + 'px';
+                    container.appendChild(textLayer);
+                });
+
+                document.getElementById('page-num').textContent = num;
+                updatePageButtons();
+            });
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function goToPrevPage() {
+            if (pageNum <= 1) return;
+            pageNum--;
+            queueRenderPage(pageNum);
+        }
+
+        function goToNextPage() {
+            if (pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            queueRenderPage(pageNum);
+        }
+
+        function updatePageButtons() {
+            document.getElementById('prev-btn').disabled = (pageNum <= 1);
+            document.getElementById('next-btn').disabled = (pageNum >= pdfDoc.numPages);
+        }
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab panels
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById(tabName + '-tab').classList.add('active');
+        }
+
+        async function highlightSelection() {
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+
+            if (!selectedText) {
+                alert('Please select some text first!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/paper/${paperId}/highlight`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        text: selectedText,
+                        page: pageNum
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    selection.removeAllRanges();
+                    loadHighlights();
+                } else {
+                    alert('Error saving highlight: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error saving highlight: ' + error);
+            }
+        }
+
+        async function loadHighlights() {
+            try {
+                const response = await fetch(`/api/paper/${paperId}/highlights`);
+                const data = await response.json();
+
+                const container = document.getElementById('highlights-list');
+
+                if (data.highlights.length === 0) {
+                    container.innerHTML = '<div class="no-highlights">No highlights yet. Start highlighting text in the PDF!</div>';
+                    document.getElementById('gen-summary-btn').disabled = true;
+                } else {
+                    container.innerHTML = data.highlights.map(h => `
+                        <div class="highlight-item" onclick="goToPage(${h.page_number})">
+                            <div class="highlight-text">"${h.highlight_text}"</div>
+                            <div class="highlight-meta">
+                                <span>Page ${h.page_number}</span>
+                                <span class="highlight-delete" onclick="deleteHighlight(${h.id}); event.stopPropagation();">Delete</span>
+                            </div>
+                        </div>
+                    `).join('');
+                    document.getElementById('gen-summary-btn').disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading highlights:', error);
+            }
+        }
+
+        function goToPage(page) {
+            pageNum = page;
+            queueRenderPage(pageNum);
+        }
+
+        async function deleteHighlight(highlightId) {
+            if (!confirm('Delete this highlight?')) return;
+
+            try {
+                const response = await fetch(`/api/paper/${paperId}/highlight/${highlightId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadHighlights();
+                } else {
+                    alert('Error deleting highlight: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error deleting highlight: ' + error);
+            }
+        }
+
+        async function generateSummaryFromHighlights() {
+            const btn = document.getElementById('gen-summary-btn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+
+            try {
+                const response = await fetch(`/api/paper/${paperId}/summary-from-highlights`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('summary-container').innerHTML = `
+                        <div class="summary-box">
+                            <h3>Summary from Highlights</h3>
+                            <div class="summary-content">${data.summary}</div>
+                        </div>
+                    `;
+
+                    // Trigger MathJax rendering
+                    if (typeof MathJax !== 'undefined') {
+                        MathJax.typesetPromise();
+                    }
+                } else {
+                    alert('Error generating summary: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error generating summary: ' + error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✨ Generate Summary from Highlights';
+            }
+        }
+
+        // Load highlights on page load
+        loadHighlights();
+    </script>
+</body>
+</html>
