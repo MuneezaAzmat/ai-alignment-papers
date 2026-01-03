@@ -31,13 +31,6 @@ An automated web application that monitors the latest AI alignment research pape
 ## Ranking System
 
 Papers are automatically ranked based on author affiliations:
-
-- **Score 10**: OpenAI, Anthropic
-- **Score 9**: Google, DeepMind, Google DeepMind
-- **Score 8**: Meta, Meta AI, Microsoft Research, Redwood Research, Alignment Research Center
-- **Score 7**: Stanford, MIT, Berkeley, Oxford, Cambridge, CMU, ARC, CHAI, MIRI
-- **Score 6**: ETH Zurich, University of Toronto, MILA, and other top institutions
-
 Higher scores indicate papers from more prominent AI safety organizations and research groups.
 
 ## Installation
