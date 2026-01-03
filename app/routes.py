@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, jsonify, request
 from app.database import get_session, Paper, AffiliationPreference, UserFeedback, FavoritePaper
-from app.fetcher import fetch_recent_papers
+from app.fetcher import fetch_recent_papers, fetch_paper_by_id, extract_arxiv_id
 from app.summarizer import summarize_papers
 from app.ranker import rank_papers, recalculate_paper_ranks, get_user_preferences
 from app.learning import get_learning_report
@@ -399,3 +399,26 @@ def check_favorite(paper_id):
             'tags': json.loads(favorite.tags) if favorite.tags else []
         } if favorite else None
     })
+
+@main.route('/api/add-paper', methods=['POST'])
+def add_paper_manually():
+    """Manually add a paper by arXiv ID or URL."""
+    data = request.json
+    user_input = data.get('input', '').strip()
+
+    if not user_input:
+        return jsonify({'success': False, 'message': 'Please provide an arXiv ID or URL'}), 400
+
+    # Extract arXiv ID from input
+    arxiv_id = extract_arxiv_id(user_input)
+
+    if not arxiv_id:
+        return jsonify({
+            'success': False,
+            'message': 'Invalid arXiv ID or URL. Please provide a valid arXiv identifier (e.g., 2301.12345) or URL.'
+        }), 400
+
+    # Fetch and add the paper
+    result = fetch_paper_by_id(arxiv_id)
+
+    return jsonify(result)

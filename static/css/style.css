@@ -905,3 +905,13 @@ nav {
         text-align: center;
     }
 }
+
+/* Add Paper Button */
+.btn-add {
+    background: #28a745;
+    color: white;
+}
+
+.btn-add:hover {
+    background: #218838;
+}

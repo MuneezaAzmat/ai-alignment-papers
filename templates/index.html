@@ -20,6 +20,7 @@
         <div class="controls">
             <button onclick="fetchPapers()" class="btn btn-primary">Fetch New Papers</button>
             <button onclick="generateSummaries()" class="btn btn-secondary">Generate Summaries</button>
+            <button onclick="showAddPaperDialog()" class="btn btn-add">+ Add Paper Manually</button>
             <div class="stats" id="stats"></div>
         </div>
 
@@ -304,6 +305,37 @@
                 } catch (error) {
                     console.error('Error checking favorite status:', error);
                 }
+            }
+        }
+
+        async function showAddPaperDialog() {
+            const input = prompt(
+                'Add a paper by arXiv ID or URL:\n\n' +
+                'Examples:\n' +
+                '• 2301.12345\n' +
+                '• https://arxiv.org/abs/2301.12345\n' +
+                '• https://arxiv.org/pdf/2301.12345.pdf'
+            );
+
+            if (!input) return;
+
+            try {
+                const response = await fetch('/api/add-paper', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({input: input})
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`Success! Paper added:\n\n"${data.title}"\n\nReloading page...`);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error adding paper: ' + error);
             }
         }
 
